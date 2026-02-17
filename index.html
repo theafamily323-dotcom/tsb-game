@@ -1039,11 +1039,14 @@
                         created: Date.now()
                     }).then(() => {
                         console.log('Room created:', roomCode);
+                        alert('Room created! Code: ' + roomCode);
                         
                         // Show code
                         document.getElementById('room-code').textContent = roomCode;
                         document.getElementById('code-display').style.display = 'block';
                         document.getElementById('mode-select').style.display = 'none';
+                        
+                        alert('UI should be updated now! Look for code: ' + roomCode);
                         
                         // Listen for player joining
                         playersRef.on('child_added', (snapshot) => {
