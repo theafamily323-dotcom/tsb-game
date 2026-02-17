@@ -14,7 +14,7 @@
         body {
             overflow: hidden;
             font-family: 'Arial Black', sans-serif;
-            background: linear-gradient(to bottom, #87CEEB, #98D8E8);
+            background: #87CEEB;
         }
 
         /* Character Select Screen */
@@ -1976,6 +1976,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.setClearColor(0x87CEEB, 1);
             renderer.domElement.style.position = 'fixed';
             renderer.domElement.style.top = '0';
             renderer.domElement.style.left = '0';
