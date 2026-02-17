@@ -2122,8 +2122,12 @@
                 scene.add(dummyGroup);
             }
 
-            camera.position.set(0, 5, 10);
-            camera.lookAt(playerGroup.position);
+            camera.position.set(0, 8, 15);
+            camera.lookAt(0, 0, 0);
+            
+            console.log('Scene children:', scene.children.length);
+            console.log('Player position:', playerGroup.position);
+            console.log('Renderer:', renderer.domElement.width, renderer.domElement.height);
 
             animate();
         }
