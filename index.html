@@ -779,17 +779,17 @@
         <h1>SELECT SERVER</h1>
         
         <div id="server-list">
-            <button class="server-button" onclick="joinServer(1)" id="server-1">
+            <button class="server-button" onclick="alert('Button clicked!'); joinServer(1);" id="server-1">
                 <div class="server-name">🟢 SERVER 1</div>
                 <div class="server-count" id="server-1-count">0/10 Players</div>
             </button>
             
-            <button class="server-button" onclick="joinServer(2)" id="server-2">
+            <button class="server-button" onclick="alert('Button clicked!'); joinServer(2);" id="server-2">
                 <div class="server-name">🟡 SERVER 2</div>
                 <div class="server-count" id="server-2-count">0/10 Players</div>
             </button>
             
-            <button class="server-button" onclick="joinServer(3)" id="server-3">
+            <button class="server-button" onclick="alert('Button clicked!'); joinServer(3);" id="server-3">
                 <div class="server-name">🔴 SERVER 3</div>
                 <div class="server-count" id="server-3-count">0/10 Players</div>
             </button>
@@ -973,9 +973,20 @@
                     
                     countEl.textContent = count + '/10 Players';
                     
+                    // Clean up old players (inactive for more than 5 minutes)
+                    const now = Date.now();
+                    snapshot.forEach((childSnapshot) => {
+                        const playerData = childSnapshot.val();
+                        if (playerData.timestamp && now - playerData.timestamp > 300000) {
+                            // Remove inactive player
+                            childSnapshot.ref.remove();
+                        }
+                    });
+                    
                     if (count >= 10) {
                         serverBtn.classList.add('full');
-                        serverBtn.onclick = null;
+                    } else {
+                        serverBtn.classList.remove('full');
                     }
                 });
             }
@@ -1001,6 +1012,7 @@
             
             const serverRef = database.ref('servers/server' + serverNum);
             const playersRef = serverRef.child('players');
+            const myPlayerRef = playersRef.child(myPlayerId);
             
             // Check if server is full
             playersRef.once('value', (snapshot) => {
@@ -1015,11 +1027,15 @@
                 alert('Adding you to server...');
                 
                 // Join server
-                playersRef.child(myPlayerId).set({
+                myPlayerRef.set({
                     joined: Date.now(),
-                    character: null
+                    character: null,
+                    timestamp: Date.now()
                 }).then(() => {
                     alert('Successfully joined server!');
+                    
+                    // Auto-remove on disconnect
+                    myPlayerRef.onDisconnect().remove();
                     
                     document.getElementById('connection-status').style.display = 'block';
                     document.getElementById('connection-status').textContent = 'Connected to Server ' + serverNum + '!';
@@ -1038,6 +1054,13 @@
                 alert('Error checking server: ' + error.message);
             });
         }
+
+        // Disconnect on page close
+        window.addEventListener('beforeunload', () => {
+            if (currentServer && myPlayerId && database) {
+                database.ref('servers/server' + currentServer + '/players/' + myPlayerId).remove();
+            }
+        });
 
         function listenToServerPlayers(serverNum) {
             const playersRef = database.ref('servers/server' + serverNum + '/players');
