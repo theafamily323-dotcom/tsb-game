@@ -1008,13 +1008,18 @@
         }
 
         function hostGame(mode) {
+            alert('hostGame called! Mode: ' + mode);
+            
             waitForFirebase(() => {
+                alert('Firebase loaded!');
                 try {
                     if (!initFirebase()) {
                         alert('Failed to initialize Firebase! Retrying...');
                         setTimeout(() => hostGame(mode), 1000);
                         return;
                     }
+                    
+                    alert('Firebase initialized successfully!');
                     
                     multiplayerMode = mode;
                     isHost = true;
