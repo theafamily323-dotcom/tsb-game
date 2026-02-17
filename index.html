@@ -1007,7 +1007,12 @@
         }
 
         function showModeSelect() {
-            document.getElementById('mode-select').style.display = 'block';
+            alert('Showing mode select...');
+            const modeDiv = document.getElementById('mode-select');
+            modeDiv.style.display = 'flex';
+            modeDiv.style.flexDirection = 'column';
+            modeDiv.style.alignItems = 'center';
+            alert('Mode select should be visible now!');
         }
 
         function showJoinInput() {
