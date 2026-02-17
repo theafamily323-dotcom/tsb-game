@@ -2128,7 +2128,9 @@
             console.log('Scene children:', scene.children.length);
             console.log('Player position:', playerGroup.position);
             console.log('Renderer:', renderer.domElement.width, renderer.domElement.height);
-
+            
+            // Force first render immediately
+            renderer.render(scene, camera);
             animate();
         }
 
@@ -3711,11 +3713,6 @@
                 // Update boss AI (disabled in multiplayer)
                 if (selectedCharacter === 'saitama' && bossEnemy && !currentServer) {
                     updateBossAI();
-                }
-                
-                // Send position to server in multiplayer
-                if (currentServer && myPlayerId && playerGroup) {
-                    sendMyPosition();
                 }
             }
 
