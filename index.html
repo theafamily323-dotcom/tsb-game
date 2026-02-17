@@ -525,27 +525,56 @@
             margin-bottom: 40px;
         }
 
-        .mp-button {
-            width: 400px;
-            padding: 25px;
-            margin: 15px 0;
-            background: linear-gradient(135deg, #4CAF50, #45a049);
-            color: white;
-            font-size: 28px;
-            font-weight: bold;
-            border: 3px solid #FFD700;
+        #server-list {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        .server-button {
+            width: 500px;
+            padding: 30px;
+            background: linear-gradient(135deg, #2d2d2d, #1a1a1a);
+            border: 4px solid #4CAF50;
             border-radius: 15px;
             cursor: pointer;
             transition: all 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .mp-button:hover {
+        .server-button:hover {
             transform: scale(1.05);
-            box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+            box-shadow: 0 0 30px rgba(76, 175, 80, 0.8);
+            border-color: #FFD700;
         }
 
-        .mp-button.pvp {
-            background: linear-gradient(135deg, #FF4444, #CC0000);
+        .server-button:active {
+            transform: scale(0.98);
+        }
+
+        .server-button.full {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #FF4444;
+        }
+
+        .server-button.full:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .server-name {
+            font-size: 36px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .server-count {
+            font-size: 24px;
+            color: #FFD700;
         }
 
         #code-display {
@@ -747,26 +776,26 @@
 <body>
     <div id="multiplayer-menu">
         <button class="back-button" onclick="backToCharacterSelect()">← Back</button>
-        <h1>MULTIPLAYER</h1>
-        <button class="mp-button" onclick="showModeSelect()">HOST GAME</button>
-        <button class="mp-button" onclick="showJoinInput()">JOIN GAME</button>
+        <h1>SELECT SERVER</h1>
         
-        <div id="mode-select" style="display: none;">
-            <h2 style="color: #FFD700; font-size: 32px; margin-bottom: 20px;">Choose Mode:</h2>
-            <button class="mp-button" onclick="hostGame('coop')">CO-OP (Fight Boss Together)</button>
-            <button class="mp-button pvp" onclick="hostGame('pvp')">PVP (Fight Each Other)</button>
+        <div id="server-list">
+            <button class="server-button" onclick="joinServer(1)" id="server-1">
+                <div class="server-name">🟢 SERVER 1</div>
+                <div class="server-count" id="server-1-count">0/10 Players</div>
+            </button>
+            
+            <button class="server-button" onclick="joinServer(2)" id="server-2">
+                <div class="server-name">🟡 SERVER 2</div>
+                <div class="server-count" id="server-2-count">0/10 Players</div>
+            </button>
+            
+            <button class="server-button" onclick="joinServer(3)" id="server-3">
+                <div class="server-name">🔴 SERVER 3</div>
+                <div class="server-count" id="server-3-count">0/10 Players</div>
+            </button>
         </div>
         
-        <div id="code-display">
-            <h2>Share this code with your friend:</h2>
-            <div id="room-code" style="font-size: 20px; letter-spacing: 2px; word-break: break-all;">------</div>
-            <p style="color: #aaa; margin-top: 15px;">Waiting for player to join...</p>
-        </div>
-        
-        <input type="text" id="join-input" placeholder="ENTER CODE" maxlength="20">
-        <button class="mp-button" id="join-button" style="display: none;" onclick="joinGame()">CONNECT</button>
-        
-        <div id="connection-status">Connected! Starting game...</div>
+        <div id="connection-status">Joining server...</div>
     </div>
 
     <div id="character-select">
@@ -886,15 +915,11 @@
         let garouUnlocked = false;
         let bossEnemy = null;
 
-        // Multiplayer System (Firebase)
+        // Multiplayer System (Firebase Servers)
         let database = null;
-        let roomRef = null;
-        let playersRef = null;
-        let isHost = false;
-        let multiplayerMode = null; // 'coop' or 'pvp'
-        let otherPlayer = null;
+        let currentServer = null;
         let myPlayerId = null;
-        let roomCode = null;
+        let serverPlayers = {};
         let updateInterval = null;
 
         // Firebase Configuration
@@ -905,9 +930,8 @@
         // Initialize Firebase
         function initFirebase() {
             try {
-                // Check if Firebase is loaded
                 if (typeof firebase === 'undefined') {
-                    console.log('Firebase not loaded yet, waiting...');
+                    console.log('Firebase not loaded yet');
                     return false;
                 }
                 
@@ -919,19 +943,199 @@
                 return true;
             } catch (error) {
                 console.error('Firebase init error:', error);
-                alert('Firebase error: ' + error.message);
                 return false;
             }
         }
 
-        function waitForFirebase(callback) {
-            if (typeof firebase !== 'undefined') {
-                callback();
-            } else {
-                console.log('Waiting for Firebase to load...');
-                setTimeout(() => waitForFirebase(callback), 500);
+        function showMultiplayerMenu() {
+            document.getElementById('character-select').style.display = 'none';
+            document.getElementById('multiplayer-menu').style.display = 'flex';
+            
+            // Initialize Firebase and update server counts
+            if (initFirebase()) {
+                updateServerCounts();
             }
         }
+
+        function backToCharacterSelect() {
+            document.getElementById('multiplayer-menu').style.display = 'none';
+            document.getElementById('character-select').style.display = 'flex';
+            document.getElementById('connection-status').style.display = 'none';
+        }
+
+        function updateServerCounts() {
+            for (let i = 1; i <= 3; i++) {
+                const serverRef = database.ref('servers/server' + i + '/players');
+                serverRef.once('value', (snapshot) => {
+                    const count = snapshot.numChildren();
+                    const countEl = document.getElementById('server-' + i + '-count');
+                    const serverBtn = document.getElementById('server-' + i);
+                    
+                    countEl.textContent = count + '/10 Players';
+                    
+                    if (count >= 10) {
+                        serverBtn.classList.add('full');
+                        serverBtn.onclick = null;
+                    }
+                });
+            }
+        }
+
+        function joinServer(serverNum) {
+            if (!database) {
+                if (!initFirebase()) {
+                    alert('Firebase not ready! Please try again.');
+                    return;
+                }
+            }
+            
+            currentServer = serverNum;
+            myPlayerId = 'player_' + Math.random().toString(36).substr(2, 9);
+            
+            const serverRef = database.ref('servers/server' + serverNum);
+            const playersRef = serverRef.child('players');
+            
+            // Check if server is full
+            playersRef.once('value', (snapshot) => {
+                if (snapshot.numChildren() >= 10) {
+                    alert('Server is full! Try another one.');
+                    return;
+                }
+                
+                // Join server
+                playersRef.child(myPlayerId).set({
+                    joined: Date.now(),
+                    character: null
+                });
+                
+                document.getElementById('connection-status').style.display = 'block';
+                document.getElementById('connection-status').textContent = 'Connected to Server ' + serverNum + '!';
+                
+                setTimeout(() => {
+                    document.getElementById('multiplayer-menu').style.display = 'none';
+                    document.getElementById('character-select').style.display = 'flex';
+                }, 2000);
+                
+                // Listen for other players
+                listenToServerPlayers(serverNum);
+            });
+        }
+
+        function listenToServerPlayers(serverNum) {
+            const playersRef = database.ref('servers/server' + serverNum + '/players');
+            
+            playersRef.on('child_added', (snapshot) => {
+                const playerId = snapshot.key;
+                if (playerId !== myPlayerId) {
+                    console.log('Player joined server:', playerId);
+                }
+            });
+            
+            playersRef.on('child_changed', (snapshot) => {
+                const playerId = snapshot.key;
+                const data = snapshot.val();
+                
+                if (playerId !== myPlayerId && data.position) {
+                    updateOtherPlayer(playerId, data);
+                }
+            });
+            
+            playersRef.on('child_removed', (snapshot) => {
+                const playerId = snapshot.key;
+                removeOtherPlayer(playerId);
+            });
+        }
+
+        function sendMyPosition() {
+            if (!database || !currentServer || !myPlayerId || !playerGroup) return;
+            
+            // Only send every 3 frames to reduce Firebase calls
+            if (!window.frameCount) window.frameCount = 0;
+            window.frameCount++;
+            
+            if (window.frameCount % 3 === 0) {
+                database.ref('servers/server' + currentServer + '/players/' + myPlayerId).update({
+                    position: {
+                        x: playerGroup.position.x,
+                        y: playerGroup.position.y,
+                        z: playerGroup.position.z,
+                        rotation: playerGroup.rotation.y
+                    },
+                    character: selectedCharacter,
+                    timestamp: Date.now()
+                });
+            }
+        }
+
+        function updateOtherPlayer(playerId, data) {
+            // Create or update other player
+            if (!serverPlayers[playerId] && data.character) {
+                createOtherPlayerInServer(playerId, data.character);
+            }
+            
+            if (serverPlayers[playerId] && data.position) {
+                serverPlayers[playerId].position.set(
+                    data.position.x,
+                    data.position.y,
+                    data.position.z
+                );
+                serverPlayers[playerId].rotation.y = data.position.rotation;
+            }
+        }
+
+        function removeOtherPlayer(playerId) {
+            if (serverPlayers[playerId]) {
+                scene.remove(serverPlayers[playerId]);
+                delete serverPlayers[playerId];
+            }
+        }
+
+        function createOtherPlayerInServer(playerId, character) {
+            const otherPlayerGroup = new THREE.Group();
+            
+            const bodyGeometry = new THREE.BoxGeometry(1, 1.5, 0.5);
+            let bodyColor = character === 'saitama' ? 0xFFFF00 : 0x333333;
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: bodyColor, transparent: true, opacity: 0.8 });
+            const otherBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            otherBody.position.y = 1.5;
+            otherBody.castShadow = true;
+            otherPlayerGroup.add(otherBody);
+
+            const headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFDBAC, transparent: true, opacity: 0.8 });
+            const otherHead = new THREE.Mesh(headGeometry, headMaterial);
+            otherHead.position.y = 2.5;
+            otherHead.castShadow = true;
+            otherPlayerGroup.add(otherHead);
+
+            // Add name tag
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, 256, 64);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('PLAYER', 128, 45);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.y = 4;
+            sprite.scale.set(2, 0.5, 1);
+            otherPlayerGroup.add(sprite);
+
+            otherPlayerGroup.position.set(5, 0, 0);
+            
+            serverPlayers[playerId] = otherPlayerGroup;
+            scene.add(otherPlayerGroup);
+        }
+
+        window.showMultiplayerMenu = showMultiplayerMenu;
+        window.backToCharacterSelect = backToCharacterSelect;
+        window.joinServer = joinServer;
 
         function trySelectGarou() {
             if (garouUnlocked) {
@@ -3546,20 +3750,14 @@
                     if (keys['r']) huntersGrasp();
                 }
                 
-                // Update boss AI
-                if (selectedCharacter === 'saitama' && bossEnemy && !playersRef) {
+                // Update boss AI (disabled in multiplayer)
+                if (selectedCharacter === 'saitama' && bossEnemy && !currentServer) {
                     updateBossAI();
                 }
                 
-                // Send position to Firebase in multiplayer
-                if (playersRef && myPlayerId && playerGroup) {
-                    // Only send every 3 frames to reduce Firebase calls
-                    if (!window.frameCount) window.frameCount = 0;
-                    window.frameCount++;
-                    
-                    if (window.frameCount % 3 === 0) {
-                        sendMyPosition();
-                    }
+                // Send position to server in multiplayer
+                if (currentServer && myPlayerId && playerGroup) {
+                    sendMyPosition();
                 }
             }
 
