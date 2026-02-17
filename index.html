@@ -1048,6 +1048,7 @@
                         host: myPlayerId,
                         created: Date.now()
                     }).then(() => {
+                        alert('SUCCESS! Room data saved to Firebase!');
                         console.log('Room created:', roomCode);
                         
                         // Show code in HUGE alert
@@ -1077,8 +1078,8 @@
                         });
                         
                     }).catch((error) => {
+                        alert('FIREBASE ERROR!\n\nType: ' + error.code + '\nMessage: ' + error.message + '\n\nFirebase might be blocked or the database URL is wrong!');
                         console.error('Room creation error:', error);
-                        alert('Failed to create room: ' + error.message);
                     });
                     
                 } catch (error) {
