@@ -549,18 +549,24 @@
         }
 
         #code-display {
-            background: rgba(0, 0, 0, 0.8);
-            padding: 30px 50px;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px 60px;
             border-radius: 15px;
-            border: 3px solid #FFD700;
-            margin: 20px 0;
+            border: 5px solid #FFD700;
             display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10001;
+            max-width: 90%;
         }
 
         #code-display h2 {
             color: #FFD700;
-            font-size: 24px;
-            margin-bottom: 15px;
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-align: center;
         }
 
         #room-code {
@@ -568,6 +574,10 @@
             color: white;
             letter-spacing: 8px;
             font-family: 'Courier New', monospace;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
         }
 
         #join-input {
