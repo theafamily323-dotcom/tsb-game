@@ -998,12 +998,13 @@
                 myPlayerId = 'p_' + Math.random().toString(36).substr(2, 6);
                 players[myPlayerId] = { x: 0, y: 0, z: 0, rotation: 0, character: null, timestamp: Date.now() };
                 await writeBin(binId, { players });
-                alert('Joined Server ' + serverNum + '! Welcome!');
+                alert('Joined Server ' + serverNum + '! Welcome!\nNow pick your character!');
                 document.getElementById('connection-status').style.display = 'block';
                 document.getElementById('connection-status').textContent = 'Connected to Server ' + serverNum + '!';
                 setTimeout(() => {
                     document.getElementById('multiplayer-menu').style.display = 'none';
                     document.getElementById('character-select').style.display = 'flex';
+                    document.getElementById('ui').style.display = 'none';
                 }, 1500);
                 syncInterval = setInterval(() => syncServer(serverNum, binId), 1000);
             } catch(e) { alert('Error: ' + e.message); }
@@ -1124,13 +1125,8 @@
             
             initGame();
             
-            // Send character selection to Firebase in multiplayer
-            if (playersRef && myPlayerId) {
-                sendMyCharacter(character);
-            }
-            
-            // Show kill counter only for Saitama (boss farming mode) in singleplayer
-            if (character === 'saitama' && !playersRef) {
+            // Show kill counter only for Saitama in singleplayer
+            if (character === 'saitama' && !currentServer) {
                 document.getElementById('kill-counter').style.display = 'block';
                 updateKillCounter();
             }
