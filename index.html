@@ -1049,14 +1049,14 @@
                         created: Date.now()
                     }).then(() => {
                         console.log('Room created:', roomCode);
-                        alert('Room created! Code: ' + roomCode);
+                        
+                        // Show code in HUGE alert
+                        alert('🎮 ROOM CREATED! 🎮\n\nYour Code: ' + roomCode + '\n\nShare this code with your friend!\n\nThey need to:\n1. Click MULTIPLAYER\n2. Click JOIN GAME\n3. Enter: ' + roomCode);
                         
                         // Show code
                         document.getElementById('room-code').textContent = roomCode;
                         document.getElementById('code-display').style.display = 'block';
                         document.getElementById('mode-select').style.display = 'none';
-                        
-                        alert('UI should be updated now! Look for code: ' + roomCode);
                         
                         // Listen for player joining
                         playersRef.on('child_added', (snapshot) => {
