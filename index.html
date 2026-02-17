@@ -899,11 +899,6 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <!-- Firebase Scripts -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    
     <script>
         let selectedCharacter = null;
         let scene, camera, renderer, playerGroup, dummies = [];
@@ -915,46 +910,55 @@
         let garouUnlocked = false;
         let bossEnemy = null;
 
-        // Multiplayer System (Firebase Servers)
-        let database = null;
+        // Multiplayer System (JSONbin)
         let currentServer = null;
         let myPlayerId = null;
         let serverPlayers = {};
-        let updateInterval = null;
+        let syncInterval = null;
 
-        // Firebase Configuration
-        const firebaseConfig = {
-            databaseURL: "https://tsb-multiplayer-default-rtdb.firebaseio.com"
-        };
+        const JSONBIN_API_KEY = '$2a$10$llYpP/.KLuJkAXpHg/SeHurPO2P4Or7UORChJ1jjHJd5iVlbIeQMu';
+        const JSONBIN_BASE_URL = 'https://api.jsonbin.io/v3';
+        const SERVER_BINS = { 1: null, 2: null, 3: null };
 
-        // Initialize Firebase
-        function initFirebase() {
+        async function getOrCreateBin(serverNum) {
+            if (SERVER_BINS[serverNum]) return SERVER_BINS[serverNum];
             try {
-                if (typeof firebase === 'undefined') {
-                    console.log('Firebase not loaded yet');
-                    return false;
-                }
-                
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                }
-                database = firebase.database();
-                console.log('Firebase initialized!');
-                return true;
-            } catch (error) {
-                console.error('Firebase init error:', error);
-                return false;
-            }
+                const res = await fetch(`${JSONBIN_BASE_URL}/b`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY,
+                        'X-Bin-Name': 'tsb-server-' + serverNum,
+                        'X-Bin-Private': 'false'
+                    },
+                    body: JSON.stringify({ players: {} })
+                });
+                const data = await res.json();
+                SERVER_BINS[serverNum] = data.metadata.id;
+                return data.metadata.id;
+            } catch(e) { return null; }
+        }
+
+        async function readBin(binId) {
+            const res = await fetch(`${JSONBIN_BASE_URL}/b/${binId}/latest`, {
+                headers: { 'X-Master-Key': JSONBIN_API_KEY }
+            });
+            const data = await res.json();
+            return data.record;
+        }
+
+        async function writeBin(binId, data) {
+            await fetch(`${JSONBIN_BASE_URL}/b/${binId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+                body: JSON.stringify(data)
+            });
         }
 
         function showMultiplayerMenu() {
             document.getElementById('character-select').style.display = 'none';
             document.getElementById('multiplayer-menu').style.display = 'flex';
-            
-            // Initialize Firebase and update server counts
-            if (initFirebase()) {
-                updateServerCounts();
-            }
+            updateServerCounts();
         }
 
         function backToCharacterSelect() {
@@ -963,173 +967,75 @@
             document.getElementById('connection-status').style.display = 'none';
         }
 
-        function updateServerCounts() {
+        async function updateServerCounts() {
             for (let i = 1; i <= 3; i++) {
-                const serverRef = database.ref('servers/server' + i + '/players');
-                serverRef.once('value', (snapshot) => {
-                    const count = snapshot.numChildren();
-                    const countEl = document.getElementById('server-' + i + '-count');
-                    const serverBtn = document.getElementById('server-' + i);
-                    
-                    countEl.textContent = count + '/10 Players';
-                    
-                    // Clean up old players (inactive for more than 5 minutes)
-                    const now = Date.now();
-                    snapshot.forEach((childSnapshot) => {
-                        const playerData = childSnapshot.val();
-                        if (playerData.timestamp && now - playerData.timestamp > 300000) {
-                            // Remove inactive player
-                            childSnapshot.ref.remove();
-                        }
+                try {
+                    const binId = await getOrCreateBin(i);
+                    if (!binId) continue;
+                    const data = await readBin(binId);
+                    const players = data.players || {};
+                    let changed = false;
+                    Object.keys(players).forEach(pid => {
+                        if (Date.now() - players[pid].timestamp > 8000) { delete players[pid]; changed = true; }
                     });
-                    
-                    if (count >= 10) {
-                        serverBtn.classList.add('full');
-                    } else {
-                        serverBtn.classList.remove('full');
+                    if (changed) await writeBin(binId, { players });
+                    const count = Object.keys(players).length;
+                    document.getElementById('server-' + i + '-count').textContent = count + '/10 Players';
+                    if (count >= 10) document.getElementById('server-' + i).classList.add('full');
+                } catch(e) {}
+            }
+        }
+
+        async function joinServer(serverNum) {
+            alert('Joining Server ' + serverNum + '...');
+            try {
+                const binId = await getOrCreateBin(serverNum);
+                if (!binId) { alert('Could not connect! Try again.'); return; }
+                const data = await readBin(binId);
+                const players = data.players || {};
+                if (Object.keys(players).length >= 10) { alert('Server full!'); return; }
+                currentServer = serverNum;
+                myPlayerId = 'p_' + Math.random().toString(36).substr(2, 6);
+                players[myPlayerId] = { x: 0, y: 0, z: 0, rotation: 0, character: null, timestamp: Date.now() };
+                await writeBin(binId, { players });
+                alert('Joined Server ' + serverNum + '! Welcome!');
+                document.getElementById('connection-status').style.display = 'block';
+                document.getElementById('connection-status').textContent = 'Connected to Server ' + serverNum + '!';
+                setTimeout(() => {
+                    document.getElementById('multiplayer-menu').style.display = 'none';
+                    document.getElementById('character-select').style.display = 'flex';
+                }, 1500);
+                syncInterval = setInterval(() => syncServer(serverNum, binId), 1000);
+            } catch(e) { alert('Error: ' + e.message); }
+        }
+
+        async function syncServer(serverNum, binId) {
+            try {
+                const data = await readBin(binId);
+                const players = data.players || {};
+                Object.keys(players).forEach(pid => {
+                    if (pid === myPlayerId) return;
+                    if (Date.now() - players[pid].timestamp > 8000) { removeOtherPlayer(pid); return; }
+                    if (players[pid].character && !serverPlayers[pid]) createOtherPlayerInServer(pid, players[pid].character);
+                    if (serverPlayers[pid]) {
+                        serverPlayers[pid].position.set(players[pid].x, players[pid].y, players[pid].z);
+                        serverPlayers[pid].rotation.y = players[pid].rotation;
                     }
                 });
-            }
-        }
-
-        function joinServer(serverNum) {
-            alert('Joining server ' + serverNum + '...');
-            
-            if (!database) {
-                alert('Database not initialized, trying now...');
-                if (!initFirebase()) {
-                    alert('Firebase not ready! Please try again.');
-                    return;
+                if (playerGroup && selectedCharacter) {
+                    players[myPlayerId] = {
+                        x: playerGroup.position.x, y: playerGroup.position.y, z: playerGroup.position.z,
+                        rotation: playerGroup.rotation.y, character: selectedCharacter, timestamp: Date.now()
+                    };
+                    await writeBin(binId, { players });
                 }
-            }
-            
-            alert('Database ready! Creating player ID...');
-            
-            currentServer = serverNum;
-            myPlayerId = 'player_' + Math.random().toString(36).substr(2, 9);
-            
-            alert('Player ID: ' + myPlayerId + '\nJoining Server ' + serverNum);
-            
-            const serverRef = database.ref('servers/server' + serverNum);
-            const playersRef = serverRef.child('players');
-            const myPlayerRef = playersRef.child(myPlayerId);
-            
-            // Check if server is full
-            playersRef.once('value', (snapshot) => {
-                const playerCount = snapshot.numChildren();
-                alert('Server has ' + playerCount + ' players');
-                
-                if (playerCount >= 10) {
-                    alert('Server is full! Try another one.');
-                    return;
-                }
-                
-                alert('Adding you to server...');
-                
-                // Join server
-                myPlayerRef.set({
-                    joined: Date.now(),
-                    character: null,
-                    timestamp: Date.now()
-                }).then(() => {
-                    alert('Successfully joined server!');
-                    
-                    // Auto-remove on disconnect
-                    myPlayerRef.onDisconnect().remove();
-                    
-                    document.getElementById('connection-status').style.display = 'block';
-                    document.getElementById('connection-status').textContent = 'Connected to Server ' + serverNum + '!';
-                    
-                    setTimeout(() => {
-                        document.getElementById('multiplayer-menu').style.display = 'none';
-                        document.getElementById('character-select').style.display = 'flex';
-                    }, 2000);
-                    
-                    // Listen for other players
-                    listenToServerPlayers(serverNum);
-                }).catch((error) => {
-                    alert('Error joining server: ' + error.message);
-                });
-            }).catch((error) => {
-                alert('Error checking server: ' + error.message);
-            });
-        }
-
-        // Disconnect on page close
-        window.addEventListener('beforeunload', () => {
-            if (currentServer && myPlayerId && database) {
-                database.ref('servers/server' + currentServer + '/players/' + myPlayerId).remove();
-            }
-        });
-
-        function listenToServerPlayers(serverNum) {
-            const playersRef = database.ref('servers/server' + serverNum + '/players');
-            
-            playersRef.on('child_added', (snapshot) => {
-                const playerId = snapshot.key;
-                if (playerId !== myPlayerId) {
-                    console.log('Player joined server:', playerId);
-                }
-            });
-            
-            playersRef.on('child_changed', (snapshot) => {
-                const playerId = snapshot.key;
-                const data = snapshot.val();
-                
-                if (playerId !== myPlayerId && data.position) {
-                    updateOtherPlayer(playerId, data);
-                }
-            });
-            
-            playersRef.on('child_removed', (snapshot) => {
-                const playerId = snapshot.key;
-                removeOtherPlayer(playerId);
-            });
-        }
-
-        function sendMyPosition() {
-            if (!database || !currentServer || !myPlayerId || !playerGroup) return;
-            
-            // Only send every 3 frames to reduce Firebase calls
-            if (!window.frameCount) window.frameCount = 0;
-            window.frameCount++;
-            
-            if (window.frameCount % 3 === 0) {
-                database.ref('servers/server' + currentServer + '/players/' + myPlayerId).update({
-                    position: {
-                        x: playerGroup.position.x,
-                        y: playerGroup.position.y,
-                        z: playerGroup.position.z,
-                        rotation: playerGroup.rotation.y
-                    },
-                    character: selectedCharacter,
-                    timestamp: Date.now()
-                });
-            }
-        }
-
-        function updateOtherPlayer(playerId, data) {
-            // Create or update other player
-            if (!serverPlayers[playerId] && data.character) {
-                createOtherPlayerInServer(playerId, data.character);
-            }
-            
-            if (serverPlayers[playerId] && data.position) {
-                serverPlayers[playerId].position.set(
-                    data.position.x,
-                    data.position.y,
-                    data.position.z
-                );
-                serverPlayers[playerId].rotation.y = data.position.rotation;
-            }
+            } catch(e) {}
         }
 
         function removeOtherPlayer(playerId) {
-            if (serverPlayers[playerId]) {
-                scene.remove(serverPlayers[playerId]);
-                delete serverPlayers[playerId];
-            }
+            if (serverPlayers[playerId] && scene) { scene.remove(serverPlayers[playerId]); delete serverPlayers[playerId]; }
         }
+
 
         function createOtherPlayerInServer(playerId, character) {
             const otherPlayerGroup = new THREE.Group();
