@@ -982,42 +982,60 @@
         }
 
         function joinServer(serverNum) {
+            alert('Joining server ' + serverNum + '...');
+            
             if (!database) {
+                alert('Database not initialized, trying now...');
                 if (!initFirebase()) {
                     alert('Firebase not ready! Please try again.');
                     return;
                 }
             }
             
+            alert('Database ready! Creating player ID...');
+            
             currentServer = serverNum;
             myPlayerId = 'player_' + Math.random().toString(36).substr(2, 9);
+            
+            alert('Player ID: ' + myPlayerId + '\nJoining Server ' + serverNum);
             
             const serverRef = database.ref('servers/server' + serverNum);
             const playersRef = serverRef.child('players');
             
             // Check if server is full
             playersRef.once('value', (snapshot) => {
-                if (snapshot.numChildren() >= 10) {
+                const playerCount = snapshot.numChildren();
+                alert('Server has ' + playerCount + ' players');
+                
+                if (playerCount >= 10) {
                     alert('Server is full! Try another one.');
                     return;
                 }
+                
+                alert('Adding you to server...');
                 
                 // Join server
                 playersRef.child(myPlayerId).set({
                     joined: Date.now(),
                     character: null
+                }).then(() => {
+                    alert('Successfully joined server!');
+                    
+                    document.getElementById('connection-status').style.display = 'block';
+                    document.getElementById('connection-status').textContent = 'Connected to Server ' + serverNum + '!';
+                    
+                    setTimeout(() => {
+                        document.getElementById('multiplayer-menu').style.display = 'none';
+                        document.getElementById('character-select').style.display = 'flex';
+                    }, 2000);
+                    
+                    // Listen for other players
+                    listenToServerPlayers(serverNum);
+                }).catch((error) => {
+                    alert('Error joining server: ' + error.message);
                 });
-                
-                document.getElementById('connection-status').style.display = 'block';
-                document.getElementById('connection-status').textContent = 'Connected to Server ' + serverNum + '!';
-                
-                setTimeout(() => {
-                    document.getElementById('multiplayer-menu').style.display = 'none';
-                    document.getElementById('character-select').style.display = 'flex';
-                }, 2000);
-                
-                // Listen for other players
-                listenToServerPlayers(serverNum);
+            }).catch((error) => {
+                alert('Error checking server: ' + error.message);
             });
         }
 
