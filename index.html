@@ -1967,6 +1967,12 @@
         }
 
         function initGame() {
+            // Remove any existing renderer
+            if (renderer) {
+                document.body.removeChild(renderer.domElement);
+                renderer = null;
+            }
+            
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
             scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
